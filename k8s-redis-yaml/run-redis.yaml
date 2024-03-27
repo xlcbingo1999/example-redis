@@ -1,0 +1,74 @@
+# https://kubernetes.io/docs/concepts/configuration/configmap/
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: redis-test-config
+  namespace: default
+  labels:
+    app: redis-test
+data:
+  key: |-
+    dir /data
+    port 6379
+    bind 0.0.0.0
+    appendonly yes
+    protected-mode no
+---
+# https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-test
+  namespace: default
+  labels:
+    app: redis-test
+spec:
+  selector:
+    matchLabels:
+      app: redis-test
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: redis-test
+    spec:
+      containers:
+      - name: redis-test
+        image: redis:latest
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 100m
+          limits:
+            cpu: 1000m
+            memory: 1024Mi
+        ports:
+        - containerPort: 6379
+          name: redis-test
+        volumeMounts:
+        - name: config
+          mountPath: /usr/local/etc/redis/redis.conf
+          subPath: redis.conf
+      volumes:
+        - name: config
+          configMap:
+            name: redis-test-config
+      restartPolicy: Always
+---
+# https://kubernetes.io/docs/concepts/services-networking/service/
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-test
+  namespace: default
+spec:
+  selector:
+    app: redis-test
+  type: NodePort
+  ports:
+  - name: redis-test
+    protocol: TCP
+    port: 6379 # 集群内部访问service的接口, clusterIP:port
+    targetPort: 6379 # pod上的接口, 需要和容器暴露的接口是一致的
+    nodePort: 30379 # 外部访问的端口
+---
